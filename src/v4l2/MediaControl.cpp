@@ -63,6 +63,7 @@ struct MediaEntity {
     char devname[32];
 };
 
+static const string icvsName = "Intel CVS CSI";
 MediaControl* MediaControl::sInstance = nullptr;
 Mutex MediaControl::sLock;
 
@@ -980,6 +981,33 @@ int MediaControl::mediaCtlSetup(int cameraId, MediaCtlConf* mc, int width, int h
             (void)setFormat(cameraId, &fmt, width, height, field);
         } else if (fmt.formatType == FC_SELECTION) {
             (void)setSelection(cameraId, &fmt, width, height);
+        }
+    }
+
+    MediaEntity* icvs = getEntityByName(icvsName.c_str());
+    if (icvs) {
+        for (uint32_t i = 0; i < icvs->numLinks; ++i) {
+            if (icvs->links[i].sink->entity == icvs) {
+                MediaEntity* sensor = icvs->links[i].source->entity;
+                int sensor_entity_id = sensor->info.id;
+                LOG1("@%s, found %s -> %s", __func__, sensor->info.name, icvsName.c_str());
+                for (McLink& link : mc->links) {
+                    if (link.srcEntity == sensor_entity_id) {
+                        LOG1("@%s, skip %s, link %s -> %s", __func__, link.srcEntityName.c_str(),
+                             icvsName.c_str(), link.sinkEntityName.c_str());
+                        link.srcEntity = icvs->info.id;
+                        link.srcEntityName = icvsName;
+                        for (uint32_t j = 0; j < icvs->info.pads; ++j) {
+                            if (icvs->pads[j].flags & MEDIA_PAD_FL_SOURCE) {
+                                link.srcPad = j;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
         }
     }
 
